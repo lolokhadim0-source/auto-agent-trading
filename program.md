@@ -63,7 +63,18 @@ After 10 experiments with only 1 improvement (10% success rate), the system has 
 - Cross-reference VIX-like volatility spikes with entry/exit timing
 - Identify multi-year narratives (QE, tightening cycles) and how they affect both markets
 
-## Phase 6: Advanced Techniques (iterations 91+)
+## Phase 6: GPU Machine Learning (iterations 91-110)
+**Priority**: USE THE GPU for ML-based price prediction
+**Available**: `from strategy.ml_model import train_model, predict_signals`
+- Train LSTM neural network on GPU using `train_model(df, lookback=60, epochs=20)`
+- Get ML signals using `predict_signals(model, df, lookback=60)` -> returns 1=long, -1=short, 0=flat
+- Combine ML predictions with price action for higher conviction entries
+- Use ML to detect patterns humans can't see in the data
+- Train separate models for different market regimes
+- Use ML confidence scores as position sizing input
+- The GPU (T4) accelerates training 10-50x vs CPU
+
+## Phase 7: Advanced Techniques (iterations 111+)
 **Priority**: Explore fundamentally different approaches if needed
 - Test mean reversion strategies (Bollinger Band reversals)
 - Implement breakout strategies (Donchian channels)

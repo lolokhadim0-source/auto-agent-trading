@@ -114,6 +114,18 @@ If your strategy function accepts a second argument `context: dict`, it will rec
 - context["timeframe"] - the current timeframe string
 Each value is a pandas DataFrame indexed by date. Merge with df.index using pd.merge_asof() or reindex.
 
+## GPU-accelerated ML Model (strategy/ml_model.py):
+You can import and use the LSTM model for GPU-accelerated price prediction:
+```python
+from strategy.ml_model import train_model, predict_signals
+model = train_model(df, lookback=60, epochs=20)  # Trains on GPU automatically
+ml_signals = predict_signals(model, df, lookback=60)  # Returns 1=long, -1=short, 0=flat
+```
+- train_model() trains an LSTM neural network on the GPU (T4) using OHLCV data
+- predict_signals() generates buy/sell signals from the trained model
+- You can combine ML signals with technical indicators for confirmation
+- The model learns patterns from price action, volume, and volatility automatically
+
 Rules:
 1. You MUST return the complete modified train.py file content
 2. The strategy() function signature can be EITHER: strategy(df: pd.DataFrame) -> pd.Series OR strategy(df: pd.DataFrame, context: dict) -> pd.Series
