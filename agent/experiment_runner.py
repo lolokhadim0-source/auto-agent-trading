@@ -102,14 +102,26 @@ def ask_llm_for_modification(current_code: str, indicators_code: str, best_score
 Propose a MODIFIED version of strategy/train.py that you believe will achieve a higher composite score.
 The composite score rewards: Sharpe ratio (30%), total return (25%), low drawdown (20%), profit factor (15%), win rate (10%).
 
+## Available economic/news data (optional second argument):
+If your strategy function accepts a second argument `context: dict`, it will receive:
+- context["fred_dff"] - Federal Funds Rate (daily, decades of history)
+- context["fred_t10y2y"] - 10Y-2Y Treasury Spread (daily)
+- context["fred_dtwexbgs"] - Trade-weighted USD Index (daily)
+- context["fred_unrate"] - Unemployment Rate (monthly)
+- context["fred_cpiaucsl"] - CPI (monthly)
+- context["economic_calendar"] - 45K+ economic events with columns: event, country, impact (high/medium/low), actual, previous, change
+- context["market"] - "us30" or "btcusd"
+- context["timeframe"] - the current timeframe string
+Each value is a pandas DataFrame indexed by date. Merge with df.index using pd.merge_asof() or reindex.
+
 Rules:
 1. You MUST return the complete modified train.py file content
-2. The strategy() function signature must stay the same: strategy(df: pd.DataFrame) -> pd.Series
+2. The strategy() function signature can be EITHER: strategy(df: pd.DataFrame) -> pd.Series OR strategy(df: pd.DataFrame, context: dict) -> pd.Series
 3. You can import from strategy.indicators (sma, ema, rsi, macd, bollinger_bands, atr, stochastic, adx, vwap, obv, donchian_channel, supertrend)
 4. You can use pandas and numpy
 5. Make ONE focused change at a time (don't rewrite everything)
 6. Consider what worked and what didn't in the experiment history
-7. Be creative: try different indicators, timeframe analysis, risk management, position sizing
+7. Be creative: try different indicators, timeframe analysis, risk management, position sizing, AND economic data correlation
 
 Return ONLY the complete Python code for train.py, nothing else. No markdown, no explanation, just the code."""
 

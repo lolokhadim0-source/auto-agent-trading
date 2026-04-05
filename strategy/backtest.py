@@ -113,12 +113,40 @@ def compute_metrics(returns: pd.Series) -> dict:
     }
 
 
+def load_economic_context() -> dict:
+    """Load all economic/news data into a dict for strategy use."""
+    context = {}
+
+    # Load FRED economic series
+    econ_dir = DATA_DIR / "economic"
+    if econ_dir.exists():
+        for pfile in econ_dir.glob("*.parquet"):
+            try:
+                context[f"fred_{pfile.stem}"] = pd.read_parquet(pfile)
+            except Exception:
+                pass
+
+    # Load economic calendar (Forex Factory style events)
+    news_dir = DATA_DIR / "news"
+    if news_dir.exists():
+        cal_path = news_dir / "economic_calendar.parquet"
+        if cal_path.exists():
+            try:
+                context["economic_calendar"] = pd.read_parquet(cal_path)
+            except Exception:
+                pass
+
+    return context
+
+
 def run_backtest(strategy_func, market: str, timeframe: str) -> dict:
     """
     Run a backtest for a given strategy function on specified market/timeframe.
 
     Args:
-        strategy_func: A callable(df: pd.DataFrame) -> pd.Series of daily returns
+        strategy_func: A callable that accepts either:
+            - strategy(df: pd.DataFrame) -> pd.Series
+            - strategy(df: pd.DataFrame, context: dict) -> pd.Series
         market: "us30" or "btcusd"
         timeframe: timeframe string matching data file
 
@@ -128,7 +156,16 @@ def run_backtest(strategy_func, market: str, timeframe: str) -> dict:
     df = load_data(market, timeframe)
     log.info(f"Backtesting on {market}/{timeframe}: {len(df)} bars, {df.index[0]} to {df.index[-1]}")
 
-    returns = strategy_func(df)
+    # Try calling with context first, fall back to just df
+    import inspect
+    sig = inspect.signature(strategy_func)
+    if len(sig.parameters) >= 2:
+        context = load_economic_context()
+        context["market"] = market
+        context["timeframe"] = timeframe
+        returns = strategy_func(df, context)
+    else:
+        returns = strategy_func(df)
 
     if not isinstance(returns, pd.Series):
         returns = pd.Series(returns, index=df.index[:len(returns)])
