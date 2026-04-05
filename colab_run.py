@@ -14,6 +14,8 @@ os.environ['FRED_API_KEY'] = os.environ.get('FRED_API_KEY', '')
 
 # Copy Binance BTC data from repo (pre-downloaded, bypasses geo-block)
 import shutil
+from pathlib import Path
+import pandas as pd
 btc_repo = Path('data/btcusd_repo')
 btc_out = Path('data/btcusd')
 btc_out.mkdir(parents=True, exist_ok=True)
