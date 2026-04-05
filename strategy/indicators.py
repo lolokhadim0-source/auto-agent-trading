@@ -108,3 +108,105 @@ def supertrend(df: pd.DataFrame, period: int = 10, multiplier: float = 3.0) -> p
         supertrend.iloc[i] = lower_band.iloc[i] if direction.iloc[i] == 1 else upper_band.iloc[i]
 
     return supertrend
+
+
+# === ICT CONCEPTS ===
+
+def fair_value_gap(df: pd.DataFrame) -> pd.Series:
+    """Detect Fair Value Gaps (FVG) - ICT concept.
+    Bullish FVG: current low > 2-bars-ago high (gap up)
+    Bearish FVG: current high < 2-bars-ago low (gap down)
+    Returns: 1=bullish FVG, -1=bearish FVG, 0=none
+    """
+    fvg = pd.Series(0, index=df.index)
+    fvg[df["low"] > df["high"].shift(2)] = 1   # Bullish FVG
+    fvg[df["high"] < df["low"].shift(2)] = -1  # Bearish FVG
+    return fvg
+
+
+def order_blocks(df: pd.DataFrame, lookback: int = 10) -> pd.Series:
+    """Detect Order Blocks - ICT concept.
+    Bullish OB: last bearish candle before a strong bullish move
+    Bearish OB: last bullish candle before a strong bearish move
+    Returns: 1=at bullish OB, -1=at bearish OB, 0=none
+    """
+    close = df["close"]
+    op = df["open"]
+    high = df["high"]
+    low = df["low"]
+
+    ob = pd.Series(0, index=df.index)
+    returns_fwd = close.pct_change(3).shift(-3)  # 3-bar forward return
+
+    for i in range(lookback, len(df) - 3):
+        # Bearish candle followed by strong bullish move = bullish OB
+        if close.iloc[i] < op.iloc[i] and returns_fwd.iloc[i] > 0.02:
+            # Check if price revisits this level
+            ob_level = low.iloc[i]
+            for j in range(i + 3, min(i + lookback, len(df))):
+                if low.iloc[j] <= ob_level * 1.005 and low.iloc[j] >= ob_level * 0.995:
+                    ob.iloc[j] = 1
+                    break
+        # Bullish candle followed by strong bearish move = bearish OB
+        if close.iloc[i] > op.iloc[i] and returns_fwd.iloc[i] < -0.02:
+            ob_level = high.iloc[i]
+            for j in range(i + 3, min(i + lookback, len(df))):
+                if high.iloc[j] >= ob_level * 0.995 and high.iloc[j] <= ob_level * 1.005:
+                    ob.iloc[j] = -1
+                    break
+
+    return ob
+
+
+def break_of_structure(df: pd.DataFrame, period: int = 20) -> pd.Series:
+    """Detect Break of Structure (BOS) - ICT concept.
+    Bullish BOS: price breaks above recent swing high
+    Bearish BOS: price breaks below recent swing low
+    Returns: 1=bullish BOS, -1=bearish BOS, 0=none
+    """
+    high = df["high"]
+    low = df["low"]
+    close = df["close"]
+
+    swing_high = high.rolling(period).max()
+    swing_low = low.rolling(period).min()
+
+    bos = pd.Series(0, index=df.index)
+    bos[(close > swing_high.shift(1)) & (close.shift(1) <= swing_high.shift(2))] = 1   # Bullish BOS
+    bos[(close < swing_low.shift(1)) & (close.shift(1) >= swing_low.shift(2))] = -1    # Bearish BOS
+    return bos
+
+
+def liquidity_sweep(df: pd.DataFrame, period: int = 20) -> pd.Series:
+    """Detect Liquidity Sweeps - ICT concept.
+    Price briefly breaks a key level then reverses (stop hunt).
+    Bullish sweep: breaks below swing low then closes above it
+    Bearish sweep: breaks above swing high then closes below it
+    Returns: 1=bullish sweep (buy signal), -1=bearish sweep (sell signal)
+    """
+    high = df["high"]
+    low = df["low"]
+    close = df["close"]
+
+    swing_high = high.rolling(period).max().shift(1)
+    swing_low = low.rolling(period).min().shift(1)
+
+    sweep = pd.Series(0, index=df.index)
+    # Bullish: wick below swing low but close above = stop hunt complete, go long
+    sweep[(low < swing_low) & (close > swing_low)] = 1
+    # Bearish: wick above swing high but close below = stop hunt complete, go short
+    sweep[(high > swing_high) & (close < swing_high)] = -1
+    return sweep
+
+
+def displacement(df: pd.DataFrame, threshold: float = 2.0) -> pd.Series:
+    """Detect Displacement candles - ICT concept.
+    Large body candle with strong momentum (body > threshold * ATR).
+    Returns: 1=bullish displacement, -1=bearish displacement, 0=none
+    """
+    body = (df["close"] - df["open"]).abs()
+    atr_val = atr(df, 14)
+    disp = pd.Series(0, index=df.index)
+    disp[(df["close"] > df["open"]) & (body > threshold * atr_val)] = 1   # Bullish
+    disp[(df["close"] < df["open"]) & (body > threshold * atr_val)] = -1  # Bearish
+    return disp

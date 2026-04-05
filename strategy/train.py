@@ -11,7 +11,11 @@ Returns: pd.Series of per-bar returns
 
 import pandas as pd
 import numpy as np
-from strategy.indicators import sma, ema, rsi, atr, adx, macd, bollinger_bands, stochastic, donchian_channel, obv, vwap
+from strategy.indicators import (
+    sma, ema, rsi, atr, adx, macd, bollinger_bands, stochastic,
+    donchian_channel, obv, vwap, supertrend,
+    fair_value_gap, order_blocks, break_of_structure, liquidity_sweep, displacement,
+)
 
 
 def strategy(df: pd.DataFrame, context: dict = None) -> pd.Series:
@@ -93,7 +97,33 @@ def strategy(df: pd.DataFrame, context: dict = None) -> pd.Series:
     vol_score[vol_spike & (close > close.shift(1))] += 0.5
     vol_score[vol_spike & (close < close.shift(1))] -= 0.5
 
-    # === STRATEGY 6: GPU ML PREDICTION ===
+    # === STRATEGY 6: ICT SMART MONEY CONCEPTS ===
+    ict_score = pd.Series(0.0, index=df.index)
+    try:
+        fvg = fair_value_gap(df)
+        bos = break_of_structure(df, 20)
+        sweep = liquidity_sweep(df, 20)
+        disp = displacement(df, 2.0)
+        ob = order_blocks(df, 10)
+
+        # Fair Value Gap - price returning to fill gap
+        ict_score += fvg * 1.0
+
+        # Break of Structure - trend change confirmation
+        ict_score += bos * 1.5
+
+        # Liquidity Sweep - stop hunt reversal (high conviction)
+        ict_score += sweep * 2.0
+
+        # Displacement - strong momentum candle
+        ict_score += disp * 0.5
+
+        # Order Blocks - institutional levels
+        ict_score += ob * 1.5
+    except Exception:
+        pass
+
+    # === STRATEGY 7: GPU ML PREDICTION ===
     ml_score = pd.Series(0.0, index=df.index)
     try:
         from strategy.ml_model import train_model, predict_signals
@@ -133,14 +163,16 @@ def strategy(df: pd.DataFrame, context: dict = None) -> pd.Series:
             pass
 
     # === COMBINE ALL STRATEGIES ===
-    # Weighted voting system
+    # Weighted voting system - 8 strategies
     combined = (
-        trend_score * 0.25 +    # 25% trend following
-        mr_score * 0.15 +       # 15% mean reversion
-        bo_score * 0.15 +       # 15% breakout
-        mom_score * 0.20 +      # 20% momentum
-        vol_score * 0.10 +      # 10% volume
-        ml_score * 0.15         # 15% ML prediction
+        trend_score * 0.15 +    # 15% trend following
+        mr_score * 0.10 +       # 10% mean reversion
+        bo_score * 0.10 +       # 10% breakout
+        mom_score * 0.15 +      # 15% momentum
+        vol_score * 0.05 +      # 5% volume
+        ict_score * 0.20 +      # 20% ICT smart money concepts
+        ml_score * 0.15 +       # 15% ML prediction
+        pd.Series(0.0, index=df.index) * 0.10  # 10% reserved for agent improvements
     )
 
     # Apply economic regime filter
