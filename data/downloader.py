@@ -51,6 +51,41 @@ def download_us30_yfinance():
         log.info(f"  Saved {len(df)} rows -> {path}")
 
 
+def download_stooq():
+    """Download deep historical data from Stooq (free, no API key needed).
+    Stooq has DJIA daily data back to 1985 and BTC since 2010.
+    """
+    out_us30 = DATA_DIR / "us30"
+    out_btc = DATA_DIR / "btcusd"
+    out_us30.mkdir(parents=True, exist_ok=True)
+    out_btc.mkdir(parents=True, exist_ok=True)
+
+    stooq_sources = [
+        ("^DJI", out_us30, "stooq_1d", "US30 (DJIA)"),
+        ("BTC.V", out_btc, "stooq_1d", "BTCUSD"),
+    ]
+
+    for symbol, out_dir, filename, label in stooq_sources:
+        log.info(f"Downloading {label} from Stooq...")
+        try:
+            url = f"https://stooq.com/q/d/l/?s={symbol}&i=d"
+            df = pd.read_csv(url)
+            if df.empty or len(df) < 10:
+                log.warning(f"  No Stooq data for {label}")
+                continue
+            df.columns = [c.lower() for c in df.columns]
+            df["date"] = pd.to_datetime(df["date"])
+            df = df.set_index("date").sort_index()
+            if "volume" not in df.columns:
+                df["volume"] = 0
+            df = df[["open", "high", "low", "close", "volume"]].dropna()
+            path = out_dir / f"{filename}.parquet"
+            df.to_parquet(path)
+            log.info(f"  Saved {len(df)} rows -> {path}")
+        except Exception as e:
+            log.warning(f"  Stooq error for {label}: {e}")
+
+
 def download_btcusd_ccxt():
     """Download BTCUSD via ccxt (tries Binance, falls back to Binance.US, then KuCoin)."""
     import ccxt
@@ -310,6 +345,9 @@ def download_all():
 
     log.info("\n--- US30 from yfinance ---")
     download_us30_yfinance()
+
+    log.info("\n--- Historical data from Stooq ---")
+    download_stooq()
 
     log.info("\n--- BTCUSD from Binance ---")
     download_btcusd_ccxt()

@@ -1,5 +1,6 @@
 """
 Telegram notification bot for trading agent experiment results.
+Works in both regular Python and Colab/Jupyter (async event loop).
 """
 
 import sys
@@ -29,9 +30,23 @@ async def _send_message_async(text: str):
 
 
 def send_notification(text: str):
-    """Send a Telegram notification (sync wrapper)."""
+    """Send a Telegram notification (works in regular Python AND Colab/Jupyter)."""
     try:
-        asyncio.run(_send_message_async(text))
+        # Check if there's already a running event loop (Colab/Jupyter)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            # We're inside an async context (Colab/Jupyter) - use nest_asyncio or thread
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                pool.submit(lambda: asyncio.run(_send_message_async(text))).result(timeout=15)
+        else:
+            # Normal Python - just run it
+            asyncio.run(_send_message_async(text))
+
         log.info(f"Telegram notification sent: {text[:50]}...")
     except Exception as e:
         log.warning(f"Telegram send failed: {e}")

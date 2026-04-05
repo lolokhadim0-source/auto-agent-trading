@@ -12,9 +12,10 @@ os.environ['ALPACA_API_KEY'] = os.environ.get('ALPACA_API_KEY', '')
 os.environ['ALPACA_SECRET_KEY'] = os.environ.get('ALPACA_SECRET_KEY', '')
 os.environ['FRED_API_KEY'] = os.environ.get('FRED_API_KEY', '')
 
-# Download US30
-from data.downloader import download_us30_yfinance, download_us30_alpaca, download_fred
+# Download US30 + Stooq historical
+from data.downloader import download_us30_yfinance, download_us30_alpaca, download_fred, download_stooq
 download_us30_yfinance()
+download_stooq()
 download_us30_alpaca()
 download_fred()
 
@@ -66,4 +67,4 @@ print('ALL DATA READY - Starting agent!')
 # Run agent
 os.makedirs('jobs', exist_ok=True)
 from agent.agent import run
-run(max_iterations=50, notify=False)
+run(max_iterations=50, notify=True)
