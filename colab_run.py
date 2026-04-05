@@ -12,6 +12,27 @@ os.environ['ALPACA_API_KEY'] = os.environ.get('ALPACA_API_KEY', '')
 os.environ['ALPACA_SECRET_KEY'] = os.environ.get('ALPACA_SECRET_KEY', '')
 os.environ['FRED_API_KEY'] = os.environ.get('FRED_API_KEY', '')
 
+# Copy Binance BTC data from repo (pre-downloaded, bypasses geo-block)
+import shutil
+btc_repo = Path('data/btcusd_repo')
+btc_out = Path('data/btcusd')
+btc_out.mkdir(parents=True, exist_ok=True)
+if btc_repo.exists():
+    for f in btc_repo.glob('*.parquet'):
+        if 'part' not in f.name:
+            shutil.copy2(f, btc_out / f.name)
+            print(f'Copied Binance {f.name}')
+    # Merge split 1m files
+    part1 = btc_repo / 'binance_1m_part1.parquet'
+    part2 = btc_repo / 'binance_1m_part2.parquet'
+    if part1.exists() and part2.exists():
+        df1 = pd.read_parquet(part1)
+        df2 = pd.read_parquet(part2)
+        merged = pd.concat([df1, df2]).sort_index()
+        merged.to_parquet(btc_out / 'binance_1m.parquet')
+        print(f'Merged Binance 1m: {len(merged)} rows (full 2017-present)')
+        del df1, df2, merged
+
 # Download US30 + Stooq historical
 from data.downloader import download_us30_yfinance, download_us30_alpaca, download_fred, download_stooq
 download_us30_yfinance()
