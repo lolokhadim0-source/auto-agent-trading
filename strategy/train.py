@@ -179,7 +179,7 @@ def strategy(df: pd.DataFrame, context: dict = None) -> pd.Series:
                 cpi = context["fred_cpiaucsl"].reindex(df.index, method="ffill")
                 if hasattr(cpi, 'iloc') and len(cpi) > 0:
                     cpi_val = cpi.iloc[:, 0] if cpi.ndim > 1 else cpi
-                    cpi_yoy = cpi_val.pct_change(12) * 100  # Year-over-year %
+                    cpi_yoy = cpi_val.diff(12) / cpi_val.shift(12) * 100  # Year-over-year %
                     regime_multiplier[cpi_yoy > 5] *= 0.8  # High inflation = bearish
                     regime_multiplier[cpi_yoy < 2] *= 1.1  # Low inflation = bullish
         except Exception:
