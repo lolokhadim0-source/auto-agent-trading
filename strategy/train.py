@@ -185,30 +185,27 @@ def strategy(df: pd.DataFrame, context: dict = None) -> pd.Series:
         except Exception:
             pass
 
-        # --- Economic Calendar Events ---
+        # --- Economic Calendar Events (vectorized — no per-bar loop) ---
         try:
             if "economic_calendar" in context:
                 cal = context["economic_calendar"]
-                # Count high-impact events near each bar
-                for idx in df.index:
-                    try:
-                        window_start = idx - pd.Timedelta(days=1)
-                        window_end = idx + pd.Timedelta(days=1)
-                        nearby = cal[(cal.index >= window_start) & (cal.index <= window_end)]
-                        if len(nearby) > 0:
-                            high_impact = nearby[nearby["impact"] == "high"] if "impact" in nearby.columns else nearby
-                            if len(high_impact) > 0:
-                                # High impact event nearby — reduce position (uncertainty)
-                                regime_multiplier.loc[idx] *= 0.6
-                                # Check if actual > previous (positive surprise)
-                                if "change" in high_impact.columns:
-                                    avg_change = high_impact["change"].mean()
-                                    if avg_change > 0:
-                                        news_score.loc[idx] += 0.5
-                                    else:
-                                        news_score.loc[idx] -= 0.5
-                    except Exception:
-                        continue
+                high_cal = cal[cal["impact"] == "high"] if "impact" in cal.columns else cal
+                if len(high_cal) > 0:
+                    # Mark bars within 1 day of a high-impact event using rolling window
+                    event_marks = pd.Series(1.0, index=high_cal.index)
+                    combined = pd.concat([pd.Series(0.0, index=df.index), event_marks])
+                    combined = combined[~combined.index.duplicated(keep='last')].sort_index()
+                    near_event = combined.rolling('2D').sum().reindex(df.index).fillna(0)
+                    regime_multiplier[near_event > 0] *= 0.6
+
+                    if "change" in high_cal.columns:
+                        # Forward-fill most recent event sentiment onto df bars
+                        pos = pd.Series(0.5, index=high_cal[high_cal["change"] > 0].index)
+                        neg = pd.Series(-0.5, index=high_cal[high_cal["change"] < 0].index)
+                        sentiment = pd.concat([pos, neg]).sort_index()
+                        sentiment = sentiment.reindex(df.index.union(sentiment.index)).sort_index()
+                        sentiment = sentiment.ffill(limit=48).reindex(df.index).fillna(0)
+                        news_score += sentiment
         except Exception:
             pass
 
