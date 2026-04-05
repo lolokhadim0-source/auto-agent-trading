@@ -73,11 +73,15 @@ def prepare_features(df: pd.DataFrame, lookback: int = 60) -> tuple:
     return torch.tensor(X).to(device), torch.tensor(y).to(device)
 
 
-def train_model(df: pd.DataFrame, lookback: int = 60, epochs: int = 20, batch_size: int = 512, lr: float = 0.001) -> PriceLSTM:
+def train_model(df: pd.DataFrame, lookback: int = 60, epochs: int = 20, batch_size: int = 512, lr: float = 0.001, max_train_bars: int = 200_000) -> PriceLSTM:
     """
     Train LSTM model on GPU. Returns trained model.
-    Training time: ~30s on T4 GPU for 100K bars, ~2min for 1M bars.
+    Training time: ~30s on A100 for 100K bars, ~2min for 200K bars.
+    max_train_bars: cap training data for huge datasets (uses most recent bars).
     """
+    # Cap training data for very large datasets — use most recent bars for relevance
+    if len(df) > max_train_bars:
+        df = df.iloc[-max_train_bars:]
     X, y = prepare_features(df, lookback)
 
     if len(X) < 100:
