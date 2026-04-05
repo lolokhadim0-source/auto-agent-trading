@@ -180,11 +180,17 @@ def run_backtest(strategy_func, market: str, timeframe: str) -> dict:
     return metrics
 
 
-def run_full_evaluation(strategy_func) -> dict:
+def run_full_evaluation(strategy_func, fast_mode: bool = True) -> dict:
     """
     Run the strategy across all available data files and aggregate results.
     Returns a summary dict with per-market scores and an overall composite.
+
+    fast_mode: Skip 1-minute data files (>1M rows) to speed up iterations.
+               Set False for final validation runs.
     """
+    # Skip these huge files in fast mode (saves ~12 min per iteration)
+    SKIP_IN_FAST_MODE = {"binance_1m", "alpaca_1Min"}
+
     results = {}
     all_scores = []
 
@@ -194,6 +200,9 @@ def run_full_evaluation(strategy_func) -> dict:
             continue
         for pfile in sorted(market_dir.glob("*.parquet")):
             tf_key = pfile.stem  # e.g. "yfinance_1d" or "binance_1h"
+            if fast_mode and tf_key in SKIP_IN_FAST_MODE:
+                log.info(f"  {market}/{tf_key}: SKIPPED (fast mode)")
+                continue
             try:
                 metrics = run_backtest(strategy_func, market, tf_key)
                 results[f"{market}/{tf_key}"] = metrics
