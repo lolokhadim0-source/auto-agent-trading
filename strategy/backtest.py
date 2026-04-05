@@ -220,8 +220,9 @@ def run_full_evaluation(strategy_func, fast_mode: bool = True) -> dict:
                 results[f"{market}/{tf_key}"] = {"error": str(e), "composite_score": -999}
                 all_scores.append(-999)
 
-    overall = np.mean(all_scores) if all_scores else -999
-    results["_overall_composite"] = round(float(overall), 4)
+    # Use median so BTC 1m's massive score doesn't drown out weak US30 timeframes
+    overall = float(np.median(all_scores)) if all_scores else -999.0
+    results["_overall_composite"] = round(overall, 4)
     results["_num_evaluated"] = len(all_scores)
     results["_timestamp"] = datetime.now().isoformat()
 

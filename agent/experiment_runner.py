@@ -121,7 +121,7 @@ from strategy.ml_model import train_model, predict_signals
 model = train_model(df, lookback=60, epochs=20)  # Trains on GPU automatically
 ml_signals = predict_signals(model, df, lookback=60)  # Returns 1=long, -1=short, 0=flat
 ```
-- train_model() trains an LSTM neural network on the GPU (T4) using OHLCV data
+- train_model() trains an LSTM neural network on the GPU (NVIDIA A100-SXM4-80GB) using OHLCV data
 - predict_signals() generates buy/sell signals from the trained model
 - You can combine ML signals with technical indicators for confirmation
 - The model learns patterns from price action, volume, and volatility automatically
