@@ -52,23 +52,39 @@ def download_us30_yfinance():
 
 
 def download_btcusd_ccxt():
-    """Download BTCUSD from Binance via ccxt (all timeframes, since 2017)."""
+    """Download BTCUSD via ccxt (tries Binance, falls back to Binance.US, then KuCoin)."""
     import ccxt
 
     out_dir = DATA_DIR / "btcusd"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    exchange = ccxt.binance({"enableRateLimit": True})
+    # Try multiple exchanges in case one is geo-blocked (e.g. Binance on US Colab servers)
+    exchange = None
+    for ex_name, ex_symbol in [("binance", BTCUSD_CCXT_SYMBOL), ("binanceus", "BTC/USD"), ("kucoin", BTCUSD_CCXT_SYMBOL)]:
+        try:
+            ex = getattr(ccxt, ex_name)({"enableRateLimit": True})
+            ex.fetch_ohlcv(ex_symbol, "1d", limit=1)
+            exchange = ex
+            symbol = ex_symbol
+            log.info(f"Using exchange: {ex_name}")
+            break
+        except Exception as e:
+            log.warning(f"  {ex_name} not available: {e}")
+            continue
+
+    if exchange is None:
+        log.error("No crypto exchange available, skipping BTCUSD download")
+        return
 
     for tf in BTCUSD_TIMEFRAMES:
-        log.info(f"Downloading BTCUSD {tf} from Binance...")
+        log.info(f"Downloading BTCUSD {tf}...")
         all_candles = []
         since = exchange.parse8601("2017-01-01T00:00:00Z")
         limit = 1000
 
         while True:
             try:
-                candles = exchange.fetch_ohlcv(BTCUSD_CCXT_SYMBOL, tf, since=since, limit=limit)
+                candles = exchange.fetch_ohlcv(symbol, tf, since=since, limit=limit)
             except Exception as e:
                 log.warning(f"  Error fetching {tf}: {e}, retrying in 5s...")
                 time.sleep(5)
