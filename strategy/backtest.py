@@ -167,8 +167,14 @@ def run_backtest(strategy_func, market: str, timeframe: str) -> dict:
     else:
         returns = strategy_func(df)
 
+    # Ensure returns is a clean 1D Series (fix shape errors)
+    if isinstance(returns, pd.DataFrame):
+        returns = returns.iloc[:, 0]
     if not isinstance(returns, pd.Series):
-        returns = pd.Series(returns, index=df.index[:len(returns)])
+        returns = pd.Series(np.array(returns).flatten(), index=df.index[:len(returns)])
+    if returns.ndim > 1:
+        returns = returns.squeeze()
+    returns = pd.Series(returns.values.flatten(), index=df.index[:len(returns)], dtype=float)
 
     metrics = compute_metrics(returns)
     metrics["market"] = market
