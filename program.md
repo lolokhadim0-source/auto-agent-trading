@@ -11,27 +11,76 @@ The composite score is a weighted combination:
 - Profit Factor: 15% weight (gross profit / gross loss)
 - Win Rate: 10% weight (percentage of winning trades)
 
-## Phase 1: Foundation (iterations 1-20)
-- Start with simple moving average strategies, vary periods
-- Test different indicator combinations (RSI, MACD, Bollinger Bands)
-- Establish a solid baseline that works on both markets
-- Focus on avoiding large drawdowns
+## Current Status Analysis
+After 10 experiments with only 1 improvement (10% success rate), the system has struggled to improve beyond the initial baseline score of 3.0991. All subsequent modifications have decreased performance, suggesting the need for a more systematic approach.
 
-## Phase 2: Refinement (iterations 21-50)
-- Add risk management: stop losses, take profits, trailing stops
-- Experiment with position sizing (ATR-based, volatility-adjusted)
-- Try trend-following vs mean-reversion approaches
-- Consider multi-indicator confirmation signals
+## Phase 1: Consolidation and Risk Management (iterations 11-25)
+**Priority**: Build upon the working baseline with conservative improvements
+- Add basic risk management: fixed stop losses (2-5% of position)
+- Implement position sizing limits (max 10% of capital per trade)
+- Test simple take profit levels (1.5:1, 2:1, 3:1 risk-reward ratios)
+- Add trade frequency controls to avoid overtrading
+- Focus on reducing drawdown rather than increasing returns
 
-## Phase 3: Advanced (iterations 51+)
-- Multi-timeframe analysis if applicable
-- Regime detection (trending vs ranging markets)
-- Adaptive parameters that adjust to market conditions
-- Volume-based confirmations (OBV, VWAP)
-- Explore Donchian channels, Supertrend, ADX filtering
+## Phase 2: Signal Quality Enhancement (iterations 26-40)
+**Priority**: Improve entry/exit timing without changing core logic
+- Add RSI overbought/oversold filters (RSI > 70 for sells, RSI < 30 for buys)
+- Implement volume confirmation (require above-average volume for signals)
+- Test ADX trend strength filter (ADX > 25 for trend following)
+- Add simple momentum confirmation (price above/below 5-day average)
+- Use MACD histogram for timing refinement
 
-## Constraints
-- Strategy must work on BOTH US30 and BTCUSD (not overfit to one)
-- Must maintain the function signature: `strategy(df) -> pd.Series`
-- Make ONE focused change per iteration
-- Keep code readable and maintainable
+## Phase 3: Multi-Asset Optimization (iterations 41-55)
+**Priority**: Address the dual-market requirement more systematically
+- Create separate parameter sets for US30 vs BTCUSD if needed
+- Test volatility-adjusted position sizing using ATR
+- Implement market regime detection (trending vs ranging)
+- Add correlation-based filters between the two assets
+- Consider time-of-day filters for each market's active hours
+
+## Phase 4: Cross-Year Pattern Recognition & Cycle Detection (iterations 56-75)
+**Priority**: The strategy MUST connect patterns across multiple years of data
+- Detect seasonal/cyclical patterns (monthly, quarterly, yearly repetitions)
+- Identify recurring manipulation patterns (stop hunts, liquidity grabs, fakeouts)
+- Analyze historical support/resistance levels that repeat across years
+- Detect accumulation/distribution phases using volume and price action
+- Identify "smart money" patterns: Wyckoff accumulation/distribution, order blocks
+- Look for time-of-day and day-of-week recurring patterns
+- Detect range-bound manipulation (repeated false breakouts at key levels)
+- Use long lookback periods (200+ bars) to capture macro cycles
+- Cross-reference US30 and BTCUSD for correlated manipulation events
+
+## Phase 5: News & Events Correlation (iterations 76-90)
+**Priority**: Connect price action to macro news events across years
+**Available data**: `data/news/economic_calendar.parquet` contains Forex Factory style events (2015-2026) with impact levels (high/medium/low), actual vs forecast vs previous values, country, and event name. Load with `pd.read_parquet()`.
+**Also available**: `data/economic/` contains FRED series (Fed Funds Rate, Treasury Spread, CPI, Unemployment, USD Index) going back decades.
+- Correlate FRED economic data (Fed rate decisions, CPI releases, unemployment) with price reactions
+- Detect recurring patterns around scheduled economic events (FOMC, NFP, CPI release dates)
+- Identify how US30 and BTCUSD react differently to the same macro events
+- Look for post-news momentum vs mean-reversion patterns
+- Detect "buy the rumor, sell the news" patterns around major events
+- Use economic regime indicators (rate hiking vs cutting, expansion vs recession) to adjust strategy
+- Cross-reference VIX-like volatility spikes with entry/exit timing
+- Identify multi-year narratives (QE, tightening cycles) and how they affect both markets
+
+## Phase 6: Advanced Techniques (iterations 91+)
+**Priority**: Explore fundamentally different approaches if needed
+- Test mean reversion strategies (Bollinger Band reversals)
+- Implement breakout strategies (Donchian channels)
+- Add multi-timeframe confirmation (higher timeframe trend)
+- Experiment with ensemble approaches (combine multiple signals)
+- Test adaptive parameters that adjust based on recent performance
+
+## Key Constraints and Guidelines
+- **Conservative approach**: Make smaller, incremental changes rather than major overhauls
+- **Preserve what works**: Always maintain the core elements of the successful baseline
+- **Risk-first mentality**: Prioritize drawdown reduction over return maximization
+- **Dual-market focus**: Every change must be tested on both US30 and BTCUSD
+- **One change per iteration**: Maintain systematic testing approach
+- **Rollback readiness**: If a change doesn't improve within 2-3 iterations, try a different direction
+
+## Success Metrics
+- Target: Achieve score > 4.0 within next 15 iterations
+- Minimum acceptable: Any improvement above 3.0991
+- Risk tolerance: Max drawdown should not exceed current baseline levels
+- Consistency: Strategies should perform reasonably on both markets, not just one

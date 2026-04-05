@@ -181,6 +181,111 @@ def download_fred():
             log.error(f"  FRED error for {series_id}: {e}")
 
 
+def download_forex_factory_calendar():
+    """
+    Download economic calendar events (Forex Factory style).
+    Uses Finnhub free API for economic calendar data with impact levels.
+    Falls back to building calendar from FRED release dates.
+    """
+    import requests
+    from config.settings import FINNHUB_API_KEY
+
+    out_dir = DATA_DIR / "news"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    all_events = []
+
+    # Method 1: Finnhub economic calendar (free, 60 calls/min)
+    if FINNHUB_API_KEY:
+        log.info("Downloading economic calendar from Finnhub...")
+        # Fetch year by year to get maximum history
+        for year in range(2015, 2027):
+            for quarter_start, quarter_end in [
+                (f"{year}-01-01", f"{year}-03-31"),
+                (f"{year}-04-01", f"{year}-06-30"),
+                (f"{year}-07-01", f"{year}-09-30"),
+                (f"{year}-10-01", f"{year}-12-31"),
+            ]:
+                try:
+                    url = "https://finnhub.io/api/v1/calendar/economic"
+                    params = {
+                        "from": quarter_start,
+                        "to": quarter_end,
+                        "token": FINNHUB_API_KEY,
+                    }
+                    resp = requests.get(url, params=params, timeout=30)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        events = data.get("economicCalendar", [])
+                        all_events.extend(events)
+                        log.info(f"  {quarter_start} to {quarter_end}: {len(events)} events")
+                    else:
+                        log.warning(f"  Finnhub {resp.status_code} for {quarter_start}")
+                    time.sleep(1)  # Rate limit
+                except Exception as e:
+                    log.warning(f"  Finnhub error: {e}")
+                    time.sleep(2)
+
+        if all_events:
+            df = pd.DataFrame(all_events)
+            if "time" in df.columns:
+                df["datetime"] = pd.to_datetime(df["time"], errors="coerce")
+            elif "date" in df.columns:
+                df["datetime"] = pd.to_datetime(df["date"], errors="coerce")
+            df = df.dropna(subset=["datetime"]).set_index("datetime").sort_index()
+            df = df[~df.index.duplicated(keep="last")]
+
+            path = out_dir / "economic_calendar.parquet"
+            df.to_parquet(path)
+            log.info(f"  Saved {len(df)} economic events -> {path}")
+            return
+
+    # Method 2: Build calendar from FRED data release dates + major events
+    log.info("Building economic event calendar from FRED data patterns...")
+
+    # Create a calendar of major recurring events based on FRED data changes
+    event_data = []
+    econ_dir = DATA_DIR / "economic"
+    if econ_dir.exists():
+        for pfile in econ_dir.glob("*.parquet"):
+            series_name = pfile.stem.upper()
+            df = pd.read_parquet(pfile)
+            df = df.dropna()
+
+            # Each data point change = an economic release event
+            for i in range(1, len(df)):
+                prev_val = df.iloc[i - 1, 0]
+                curr_val = df.iloc[i, 0]
+                change = curr_val - prev_val if pd.notna(prev_val) and pd.notna(curr_val) else 0
+
+                impact = "low"
+                if series_name in ("DFF", "CPIAUCSL", "UNRATE"):
+                    impact = "high"
+                elif series_name in ("T10Y2Y", "VIXCLS"):
+                    impact = "medium"
+
+                event_data.append({
+                    "event": f"{series_name}_RELEASE",
+                    "country": "US",
+                    "impact": impact,
+                    "actual": curr_val,
+                    "previous": prev_val,
+                    "change": change,
+                    "datetime": df.index[i],
+                })
+
+    if event_data:
+        df = pd.DataFrame(event_data)
+        df["datetime"] = pd.to_datetime(df["datetime"])
+        df = df.set_index("datetime").sort_index()
+
+        path = out_dir / "economic_calendar.parquet"
+        df.to_parquet(path)
+        log.info(f"  Built {len(df)} events from FRED release dates -> {path}")
+    else:
+        log.warning("  No economic data available to build calendar")
+
+
 def download_all():
     """Download all market data."""
     log.info("=" * 60)
@@ -199,11 +304,14 @@ def download_all():
     log.info("\n--- Economic data from FRED ---")
     download_fred()
 
+    log.info("\n--- Economic calendar (Forex Factory style) ---")
+    download_forex_factory_calendar()
+
     log.info("\n" + "=" * 60)
     log.info("Data download complete!")
 
     # Summary
-    for subdir in ["us30", "btcusd", "economic"]:
+    for subdir in ["us30", "btcusd", "economic", "news"]:
         d = DATA_DIR / subdir
         if d.exists():
             files = list(d.glob("*.parquet"))
