@@ -193,6 +193,8 @@ Rules:
 10. **CRITICAL: You MUST use ICT indicators** (at least fair_value_gap + break_of_structure + liquidity_sweep)
 11. Use ONLY vectorized pandas/numpy operations — NO Python for-loops over DataFrame rows
 12. Handle edge cases: short DataFrames (<100 bars), missing context, NaN values
+13. **CRITICAL BUG PREVENTION**: All boolean masks and Series MUST use df.index as their index. NEVER create a Series with integer/float index and try to apply it to df. Always do: `pd.Series(0.0, index=df.index)` — NOT `pd.Series(0.0, index=range(len(df)))`. Reindex any economic data to df.index BEFORE using it in boolean operations.
+14. **CRITICAL**: The final return MUST be `pd.Series(result.values.flatten(), index=df.index, dtype=float)` — ALWAYS use df.index, never the result's own index.
 
 Return ONLY the complete Python code for train.py, nothing else. No markdown, no explanation, just the code."""
 
