@@ -19,7 +19,7 @@ FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "")
 
 # US30/DJIA config
 US30_YFINANCE_SYMBOL = "^DJI"
-US30_TIMEFRAMES_YFINANCE = ["1d", "1wk", "1mo"]
+US30_TIMEFRAMES_YFINANCE = ["1h", "1d", "1wk", "1mo"]
 US30_ALPACA_SYMBOL = "DIA"  # DJIA ETF (Alpaca doesn't have index directly)
 US30_TIMEFRAMES_ALPACA = ["1Min", "5Min", "15Min", "1Hour", "1Day"]
 

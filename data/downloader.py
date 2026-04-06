@@ -26,16 +26,24 @@ log = logging.getLogger(__name__)
 
 
 def download_us30_yfinance():
-    """Download DJIA data from yfinance (daily/weekly/monthly, back to ~1985)."""
+    """Download DJIA data from yfinance (intraday + daily/weekly/monthly)."""
     import yfinance as yf
 
     out_dir = DATA_DIR / "us30"
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # yfinance period limits by timeframe
+    period_map = {
+        "1m": "7d", "5m": "60d", "15m": "60d", "30m": "60d",
+        "1h": "2y",  # 730 days max for hourly
+        "1d": "max", "1wk": "max", "1mo": "max",
+    }
+
     for tf in US30_TIMEFRAMES_YFINANCE:
-        log.info(f"Downloading US30 {tf} from yfinance...")
+        period = period_map.get(tf, "max")
+        log.info(f"Downloading US30 {tf} from yfinance (period={period})...")
         ticker = yf.Ticker(US30_YFINANCE_SYMBOL)
-        df = ticker.history(period="max", interval=tf)
+        df = ticker.history(period=period, interval=tf)
 
         if df.empty:
             log.warning(f"No data for US30 {tf}")
@@ -52,8 +60,9 @@ def download_us30_yfinance():
 
 
 def download_stooq():
-    """Download deep historical data from multiple free sources.
-    Gets DJIA back to 1985 via FRED and BTC via yfinance.
+    """Download deep historical data with REAL volume.
+    US30: DIA ETF from yfinance (real OHLCV since 1998, replaces fake FRED data).
+    BTC: yfinance BTC-USD (since 2014).
     """
     import yfinance as yf
 
@@ -62,27 +71,18 @@ def download_stooq():
     out_us30.mkdir(parents=True, exist_ok=True)
     out_btc.mkdir(parents=True, exist_ok=True)
 
-    # 1. US30 deep history via FRED (DJIA series goes back to 1985)
-    log.info("Downloading US30 (DJIA) deep history from FRED...")
+    # 1. US30 deep history via DIA ETF (real OHLCV with volume, since 1998)
+    log.info("Downloading US30 (DIA ETF) deep history from yfinance...")
     try:
-        if FRED_API_KEY:
-            from fredapi import Fred
-            fred = Fred(api_key=FRED_API_KEY)
-            djia = fred.get_series("DJIA")
-            if djia is not None and len(djia) > 100:
-                df = djia.to_frame(name="close")
-                df.index = pd.to_datetime(df.index)
-                df.index.name = "date"
-                df["open"] = df["close"]
-                df["high"] = df["close"]
-                df["low"] = df["close"]
-                df["volume"] = 0
-                df = df[["open", "high", "low", "close", "volume"]].dropna()
-                path = out_us30 / "stooq_1d.parquet"
-                df.to_parquet(path)
-                log.info(f"  FRED DJIA: Saved {len(df)} rows -> {path} ({df.index.min()} to {df.index.max()})")
+        df = yf.Ticker("DIA").history(period="max", interval="1d")
+        if not df.empty:
+            df.index = df.index.tz_localize(None) if df.index.tz else df.index
+            df = df.rename(columns=str.lower)[["open", "high", "low", "close", "volume"]].dropna()
+            path = out_us30 / "stooq_1d.parquet"
+            df.to_parquet(path)
+            log.info(f"  DIA ETF: Saved {len(df)} rows -> {path} ({df.index.min()} to {df.index.max()}) — REAL volume!")
     except Exception as e:
-        log.warning(f"  FRED DJIA error: {e}")
+        log.warning(f"  DIA ETF error: {e}")
 
     # 2. BTC deep history via yfinance (goes back to 2014)
     log.info("Downloading BTCUSD deep history from yfinance...")
