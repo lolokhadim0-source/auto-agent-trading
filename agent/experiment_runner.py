@@ -273,6 +273,16 @@ def run_experiment(iteration: int, program: str, notify_func=None) -> dict:
 
     log.info(f"New score: {new_score} | Best score: {best_score}")
 
+    # Collect error details so LLM can learn from failures
+    errors = []
+    for key, val in results.items():
+        if key.startswith("_"):
+            continue
+        if isinstance(val, dict) and "error" in val:
+            err_msg = str(val["error"])[:100]  # Truncate long errors
+            errors.append(f"{key}: {err_msg}")
+    error_summary = "; ".join(errors[:5]) if errors else "no errors"
+
     if new_score > best_score:
         log.info(f"IMPROVEMENT! {best_score} -> {new_score} (+{new_score - best_score:.4f})")
         save_best_score(new_score, iteration, results)
@@ -291,7 +301,7 @@ def run_experiment(iteration: int, program: str, notify_func=None) -> dict:
     else:
         log.info(f"No improvement ({new_score} <= {best_score}), reverting.")
         save_file(TRAIN_FILE, current_code)
-        log_experiment(iteration, new_score, False, f"No improvement: {new_score} vs {best_score}")
+        log_experiment(iteration, new_score, False, f"No improvement: {new_score} vs {best_score}. Errors: {error_summary}")
 
         return {"iteration": iteration, "improved": False, "old_score": best_score, "new_score": new_score}
 
