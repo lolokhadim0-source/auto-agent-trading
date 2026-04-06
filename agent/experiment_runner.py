@@ -148,6 +148,14 @@ def ask_llm_for_modification(current_code: str, indicators_code: str, best_score
 Propose a MODIFIED version of strategy/train.py that you believe will achieve a higher composite score.
 The composite score rewards: Sharpe ratio (30%), total return (25%), low drawdown (20%), profit factor (15%), win rate (10%).
 
+## STRATEGY EVOLUTION:
+Study the experiment history. Identify which changes IMPROVED the score and which FAILED.
+- DOUBLE DOWN on what works — if a change improved the score, push it further
+- COMBINE winning signals into hybrid "super signals" (e.g., ICT sweep + Volume spike + Trend = 3x weight)
+- CREATE your own evolved strategy logic on TOP of the 9 base strategies
+- The 9 strategies are ingredients — YOUR JOB is to find the best recipe
+- ADAPT all indicator periods to the timeframe (5m needs different periods than 1d)
+
 ## Available economic/news data (optional second argument):
 If your strategy function accepts a second argument `context: dict`, it will receive:
 - context["fred_dff"] - Federal Funds Rate (daily, decades of history)
