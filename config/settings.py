@@ -45,4 +45,4 @@ OUTER_LOOP_EVERY_N = 10  # Run meta-agent every N inner iterations
 
 # LLM settings
 LLM_MODEL = "claude-sonnet-4-20250514"
-LLM_MAX_TOKENS = 4096
+LLM_MAX_TOKENS = 16000  # 4096 was too small — LLM truncated code causing SyntaxErrors

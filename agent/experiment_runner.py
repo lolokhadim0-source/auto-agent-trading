@@ -54,9 +54,19 @@ REQUIRED_CHECKS = [
 
 def validate_strategy_code(code: str) -> tuple[bool, list[str]]:
     """Validate that LLM-generated code contains ALL required components.
+    Also checks for syntax errors (truncated LLM output).
     Returns (is_valid, list_of_missing_items).
     """
     missing = []
+
+    # 1. Syntax check — catches truncated LLM output before wasting a backtest
+    try:
+        compile(code, "<strategy>", "exec")
+    except SyntaxError as e:
+        missing.append(f"SYNTAX ERROR at line {e.lineno}: {e.msg}")
+        return (False, missing)
+
+    # 2. Required component checks
     for desc, keyword in REQUIRED_CHECKS:
         if keyword not in code:
             missing.append(desc)
