@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+data/us30/*.parquet
+data/btcusd/*.parquet
+data/economic/*.parquet
+!data/btcusd_repo/
+jobs/
+.venv/
+*.egg-info/
+.claude/
