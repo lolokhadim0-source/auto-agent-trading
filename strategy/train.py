@@ -77,23 +77,31 @@ def strategy(df: pd.DataFrame, context: dict = None) -> pd.Series:
     trend_score = trend_score + np.where(sma_fast > sma_med, 1.0, np.where(sma_fast < sma_med, -1.0, 0.0))
     trend_score = trend_score + np.where(ema_fast > ema_med, 0.5, np.where(ema_fast < ema_med, -0.5, 0.0))
     trend_score = trend_score + np.where(close > sma_trend, 0.5, np.where(close < sma_trend, -0.5, 0.0))
-    # Only trade trends when ADX confirms
-    trend_score = trend_score * (adx_val > 20).astype(float)
+    # Smooth ADX gate: gradual ramp from 15->30 instead of hard cutoff at 20
+    adx_trend_weight = np.clip((adx_val - 15) / 15, 0, 1)
+    trend_score = trend_score * adx_trend_weight
 
     # === 2. MEAN REVERSION (10%) ===
     mr_score = pd.Series(0.0, index=df.index)
     mr_score = mr_score + np.where(close < bb_lower, 1.5, np.where(close > bb_upper, -1.5, 0.0))
     mr_score = mr_score + np.where(rsi_val < 30, 1.0, np.where(rsi_val > 70, -1.0, 0.0))
-    # Only mean-revert in ranging markets
-    mr_score = mr_score * (adx_val <= 25).astype(float)
+    # Smooth ADX gate: gradual ramp from 30->15 instead of hard cutoff at 25
+    adx_mr_weight = np.clip((30 - adx_val) / 15, 0, 1)
+    mr_score = mr_score * adx_mr_weight
+
+    # === ZERO-VOLUME DETECTION ===
+    # Some data sources (e.g., Stooq) have zero volume — detect and handle gracefully
+    has_volume = volume.sum() > 0
+    vol_avg = volume.rolling(max(10, fast_p)).mean() if has_volume else pd.Series(0.0, index=df.index)
+    vol_spike = (volume > vol_avg * 1.3).astype(float) if has_volume else pd.Series(0.0, index=df.index)
 
     # === 3. BREAKOUT (10%) ===
     bo_score = pd.Series(0.0, index=df.index)
     bo_score = bo_score + np.where(close > dc_upper.shift(1).values, 1.5, np.where(close < dc_lower.shift(1).values, -1.5, 0.0))
-    # Volume confirmation for breakouts
-    vol_avg = volume.rolling(max(10, fast_p)).mean()
-    vol_spike = (volume > vol_avg * 1.3).astype(float)
-    bo_score = bo_score * (0.5 + 0.5 * vol_spike)  # Boost breakouts with volume
+    # Volume confirmation for breakouts (skip volume gate when no volume data)
+    if has_volume:
+        bo_score = bo_score * (0.5 + 0.5 * vol_spike)  # Boost breakouts with volume
+    # else: keep full breakout score — price action alone is sufficient
 
     # === 4. MOMENTUM (15%) ===
     mom_score = pd.Series(0.0, index=df.index)
@@ -107,14 +115,27 @@ def strategy(df: pd.DataFrame, context: dict = None) -> pd.Series:
 
     # === 5. VOLUME (8%) ===
     vol_score = pd.Series(0.0, index=df.index)
-    obv_sma_val = sma(obv_val, max(10, fast_p))
-    vol_score = vol_score + np.where(obv_val > obv_sma_val, 0.3, np.where(obv_val < obv_sma_val, -0.3, 0.0))
-    vol_score = vol_score + np.where(vol_spike.astype(bool) & (close > close.shift(1)), 0.5, 0.0)
-    vol_score = vol_score + np.where(vol_spike.astype(bool) & (close < close.shift(1)), -0.5, 0.0)
+    if has_volume:
+        obv_sma_val = sma(obv_val, max(10, fast_p))
+        vol_score = vol_score + np.where(obv_val > obv_sma_val, 0.3, np.where(obv_val < obv_sma_val, -0.3, 0.0))
+        vol_score = vol_score + np.where(vol_spike.astype(bool) & (close > close.shift(1)), 0.5, 0.0)
+        vol_score = vol_score + np.where(vol_spike.astype(bool) & (close < close.shift(1)), -0.5, 0.0)
+    else:
+        # No volume data: use price-action proxy (range expansion = pseudo-volume)
+        bar_range = (high - low) / close
+        avg_range = bar_range.rolling(max(10, fast_p)).mean()
+        range_spike = (bar_range > avg_range * 1.3).astype(float)
+        vol_score = vol_score + np.where(range_spike.astype(bool) & (close > close.shift(1)), 0.4, 0.0)
+        vol_score = vol_score + np.where(range_spike.astype(bool) & (close < close.shift(1)), -0.4, 0.0)
+        vol_spike = range_spike  # Use range spike as proxy for volume spike
 
     # === 6. ICT SMART MONEY (18%) ===
     ict_score = pd.Series(0.0, index=df.index)
-    ict_score = ict_score + fvg * 1.0
+    # Filter FVGs by ATR magnitude — removes noisy overnight gaps on US30
+    fvg_size = (low - high.shift(2)).abs() / close  # Gap size as % of price
+    atr_pct_fvg = atr_val / close
+    fvg_significant = (fvg_size > atr_pct_fvg * 0.3).astype(float)  # FVG must be > 30% of ATR
+    ict_score = ict_score + fvg * fvg_significant * 1.0  # Only count significant FVGs
     ict_score = ict_score + bos * 1.5
     ict_score = ict_score + sweep * 2.0  # Liquidity sweeps = highest conviction
     ict_score = ict_score + disp * 0.5
@@ -274,9 +295,10 @@ def strategy(df: pd.DataFrame, context: dict = None) -> pd.Series:
     confirmation = confirmation + np.where(bear_count >= 5, 0.5, 0.0)
     confirmation = confirmation + np.where(bear_count >= 7, 0.5, 0.0)
 
-    # === SUPER SIGNALS: ICT + Trend + Volume aligned ===
-    super_bull = ((ict_score > 0) & (trend_score > 0) & (vol_score > 0)).astype(float)
-    super_bear = ((ict_score < 0) & (trend_score < 0) & (vol_score < 0)).astype(float)
+    # === SUPER SIGNALS: ICT + Trend + Momentum aligned (volume optional) ===
+    # Use momentum as third confirmation when volume is unavailable
+    super_bull = ((ict_score > 0) & (trend_score > 0) & ((vol_score > 0) | (mom_score > 0))).astype(float)
+    super_bear = ((ict_score < 0) & (trend_score < 0) & ((vol_score < 0) | (mom_score < 0))).astype(float)
     super_signal = super_bull - super_bear
 
     # === COMBINE ALL 9 STRATEGIES ===
@@ -303,9 +325,13 @@ def strategy(df: pd.DataFrame, context: dict = None) -> pd.Series:
 
     # === CONVICTION-BASED SIGNAL & SIZING ===
     abs_combined = combined.abs()
+    # Adaptive threshold: use the signal's own distribution instead of fixed 0.3
+    # This ensures the strategy generates trades on ALL markets, not just volatile ones
+    signal_median = abs_combined.rolling(min(200, n // 2), min_periods=20).median().fillna(0.15)
+    threshold = np.clip(signal_median * 0.8, 0.05, 0.5)  # At least 0.05, at most 0.5
     signal = pd.Series(0.0, index=df.index)
-    signal = signal + np.where(combined > 0.3, 1.0, 0.0)
-    signal = signal + np.where(combined < -0.3, -1.0, 0.0)
+    signal = signal + np.where(combined > threshold, 1.0, 0.0)
+    signal = signal + np.where(combined < -threshold, -1.0, 0.0)
 
     # Graduated position sizing by conviction
     atr_pct = atr_val / close
