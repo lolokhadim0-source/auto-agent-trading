@@ -91,12 +91,14 @@ def compute_metrics(returns: pd.Series) -> dict:
 
     # Composite score: weighted combination the agent can try to maximize
     # This is the PRIMARY metric for the experiment loop
+    # IMPORTANT: Cap each component so high-frequency datasets (millions of bars)
+    # can't produce insane scores via compounding (e.g. BTC 1m = 26000x return)
     composite = (
-        0.30 * sharpe
-        + 0.25 * (total_return * 10)  # scale up
-        + 0.20 * (1 + max_dd) * 5     # penalize drawdown (max_dd is negative)
-        + 0.15 * profit_factor
-        + 0.10 * win_rate * 5
+        0.30 * float(np.clip(sharpe, -5, 5))
+        + 0.25 * float(np.clip(total_return * 10, -10, 30))   # cap return contribution
+        + 0.20 * float(np.clip((1 + max_dd) * 5, 0, 5))      # drawdown already bounded
+        + 0.15 * float(np.clip(profit_factor, 0, 5))          # cap profit factor
+        + 0.10 * win_rate * 5                                  # win_rate already 0-1
     )
 
     return {

@@ -89,5 +89,22 @@ print('ALL DATA READY - Starting agent!')
 
 # Run agent
 os.makedirs('jobs', exist_ok=True)
+
+# Reset best_score.json — previous runs used np.mean (bug) producing inflated scores.
+# This ensures iterations start fresh with the corrected median + capped scoring.
+import json
+best_score_path = Path('jobs/best_score.json')
+if best_score_path.exists():
+    try:
+        old = json.loads(best_score_path.read_text())
+        if old.get('score', 0) > 20:  # Any score > 20 is from the mean bug
+            print(f"Resetting inflated best_score ({old['score']}) from mean-scoring bug")
+            best_score_path.write_text(json.dumps({
+                "score": -999.0, "iteration": 0,
+                "timestamp": "2026-04-05T00:00:00", "results": {}
+            }, indent=2))
+    except Exception:
+        pass
+
 from agent.agent import run
 run(max_iterations=50, notify=True)

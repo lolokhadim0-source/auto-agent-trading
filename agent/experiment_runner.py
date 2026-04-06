@@ -261,7 +261,7 @@ def run_experiment(iteration: int, program: str, notify_func=None) -> dict:
         if "strategy.train" in sys.modules:
             del sys.modules["strategy.train"]
         from strategy.train import strategy
-        results = run_full_evaluation(strategy, fast_mode=False)
+        results = run_full_evaluation(strategy, fast_mode=True)
         new_score = results["_overall_composite"]
     except Exception as e:
         log.error(f"Backtest failed: {e}")
