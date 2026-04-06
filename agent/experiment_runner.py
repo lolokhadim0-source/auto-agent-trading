@@ -26,6 +26,42 @@ TRAIN_FILE = STRATEGY_DIR / "train.py"
 INDICATORS_FILE = STRATEGY_DIR / "indicators.py"
 BEST_SCORE_FILE = JOBS_DIR / "best_score.json"
 
+# ── Code Validation ──────────────────────────────────────────────
+# Enforces that LLM output actually keeps ALL required components.
+# Without this, the LLM can silently drop strategies across iterations.
+
+REQUIRED_CHECKS = [
+    # (description, substring that MUST appear in the code)
+    ("Trend Following strategy",    "trend_score"),
+    ("Mean Reversion strategy",     "mr_score"),
+    ("Breakout strategy",           "bo_score"),
+    ("Momentum strategy",           "mom_score"),
+    ("Volume strategy",             "vol_score"),
+    ("ICT Smart Money strategy",    "ict_score"),
+    ("ML/GPU strategy",             "ml_score"),
+    ("Cross-Year strategy",         "cross_year"),
+    ("News/Economic strategy",      "news_score"),
+    ("ML model import",             "train_model"),
+    ("ML predict import",           "predict_signals"),
+    ("fair_value_gap indicator",    "fair_value_gap"),
+    ("break_of_structure indicator","break_of_structure"),
+    ("liquidity_sweep indicator",   "liquidity_sweep"),
+    ("Economic context usage",      "context"),
+    ("Strategy signature",          "def strategy(df"),
+    ("Returns pd.Series",          "pd.Series"),
+]
+
+
+def validate_strategy_code(code: str) -> tuple[bool, list[str]]:
+    """Validate that LLM-generated code contains ALL required components.
+    Returns (is_valid, list_of_missing_items).
+    """
+    missing = []
+    for desc, keyword in REQUIRED_CHECKS:
+        if keyword not in code:
+            missing.append(desc)
+    return (len(missing) == 0, missing)
+
 
 def load_best_score() -> dict:
     if BEST_SCORE_FILE.exists():
@@ -197,9 +233,17 @@ def run_experiment(iteration: int, program: str, notify_func=None) -> dict:
         log_experiment(iteration, best_score, False, f"LLM error: {e}")
         return {"iteration": iteration, "improved": False, "error": str(e)}
 
+    # Validate LLM output has ALL required components
+    is_valid, missing = validate_strategy_code(new_code)
+    if not is_valid:
+        msg = f"LLM code REJECTED — missing: {', '.join(missing)}"
+        log.warning(msg)
+        log_experiment(iteration, best_score, False, msg)
+        return {"iteration": iteration, "improved": False, "error": msg}
+
     # Write new code
     save_file(TRAIN_FILE, new_code)
-    log.info("New strategy code written, running backtest...")
+    log.info("New strategy code written (passed validation), running backtest...")
 
     # Run backtest with new code
     try:
@@ -248,7 +292,6 @@ def run_inner_loop(max_iterations: int = None, notify_func=None):
         max_iterations = MAX_INNER_ITERATIONS
 
     program_path = Path(__file__).parent.parent / "program.md"
-    program = program_path.read_text(encoding="utf-8") if program_path.exists() else "Optimize the trading strategy for maximum composite score."
 
     best = load_best_score()
     start_iter = best.get("iteration", 0) + 1
@@ -256,6 +299,8 @@ def run_inner_loop(max_iterations: int = None, notify_func=None):
     log.info(f"Starting inner loop from iteration {start_iter}, max {max_iterations}")
 
     for i in range(start_iter, start_iter + max_iterations):
+        # Re-read program.md each iteration so meta-agent updates are picked up
+        program = program_path.read_text(encoding="utf-8") if program_path.exists() else "Optimize the trading strategy for maximum composite score."
         try:
             result = run_experiment(i, program, notify_func)
             log.info(f"Iteration {i} result: {result}")
