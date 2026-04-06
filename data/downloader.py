@@ -52,38 +52,50 @@ def download_us30_yfinance():
 
 
 def download_stooq():
-    """Download deep historical data from Stooq (free, no API key needed).
-    Stooq has DJIA daily data back to 1985 and BTC since 2010.
+    """Download deep historical data from multiple free sources.
+    Gets DJIA back to 1985 via FRED and BTC via yfinance.
     """
+    import yfinance as yf
+
     out_us30 = DATA_DIR / "us30"
     out_btc = DATA_DIR / "btcusd"
     out_us30.mkdir(parents=True, exist_ok=True)
     out_btc.mkdir(parents=True, exist_ok=True)
 
-    stooq_sources = [
-        ("^DJI", out_us30, "stooq_1d", "US30 (DJIA)"),
-        ("BTC.V", out_btc, "stooq_1d", "BTCUSD"),
-    ]
-
-    for symbol, out_dir, filename, label in stooq_sources:
-        log.info(f"Downloading {label} from Stooq...")
-        try:
-            url = f"https://stooq.com/q/d/l/?s={symbol}&i=d"
-            df = pd.read_csv(url)
-            if df.empty or len(df) < 10:
-                log.warning(f"  No Stooq data for {label}")
-                continue
-            df.columns = [c.lower() for c in df.columns]
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date").sort_index()
-            if "volume" not in df.columns:
+    # 1. US30 deep history via FRED (DJIA series goes back to 1985)
+    log.info("Downloading US30 (DJIA) deep history from FRED...")
+    try:
+        if FRED_API_KEY:
+            from fredapi import Fred
+            fred = Fred(api_key=FRED_API_KEY)
+            djia = fred.get_series("DJIA")
+            if djia is not None and len(djia) > 100:
+                df = djia.to_frame(name="close")
+                df.index = pd.to_datetime(df.index)
+                df.index.name = "date"
+                df["open"] = df["close"]
+                df["high"] = df["close"]
+                df["low"] = df["close"]
                 df["volume"] = 0
-            df = df[["open", "high", "low", "close", "volume"]].dropna()
-            path = out_dir / f"{filename}.parquet"
+                df = df[["open", "high", "low", "close", "volume"]].dropna()
+                path = out_us30 / "stooq_1d.parquet"
+                df.to_parquet(path)
+                log.info(f"  FRED DJIA: Saved {len(df)} rows -> {path} ({df.index.min()} to {df.index.max()})")
+    except Exception as e:
+        log.warning(f"  FRED DJIA error: {e}")
+
+    # 2. BTC deep history via yfinance (goes back to 2014)
+    log.info("Downloading BTCUSD deep history from yfinance...")
+    try:
+        df = yf.Ticker("BTC-USD").history(period="max", interval="1d")
+        if not df.empty:
+            df.index = df.index.tz_localize(None) if df.index.tz else df.index
+            df = df.rename(columns=str.lower)[["open", "high", "low", "close", "volume"]].dropna()
+            path = out_btc / "stooq_1d.parquet"
             df.to_parquet(path)
-            log.info(f"  Saved {len(df)} rows -> {path}")
-        except Exception as e:
-            log.warning(f"  Stooq error for {label}: {e}")
+            log.info(f"  yfinance BTC: Saved {len(df)} rows -> {path} ({df.index.min()} to {df.index.max()})")
+    except Exception as e:
+        log.warning(f"  yfinance BTC error: {e}")
 
 
 def download_btcusd_ccxt():

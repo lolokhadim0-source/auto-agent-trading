@@ -126,14 +126,27 @@ ml_signals = predict_signals(model, df, lookback=60)  # Returns 1=long, -1=short
 - You can combine ML signals with technical indicators for confirmation
 - The model learns patterns from price action, volume, and volatility automatically
 
+## Available ICT indicators (strategy/indicators.py):
+You can import: fair_value_gap, order_blocks, break_of_structure, liquidity_sweep, displacement
+Example: `from strategy.indicators import fair_value_gap, break_of_structure, liquidity_sweep`
+
+## Cross-Year Pattern Analysis:
+Use df.index to find the current month/quarter, then compare price action to the same period in prior years.
+Example: rolling 252-bar (1 year) returns, seasonal momentum, anniversary reactions.
+
 Rules:
 1. You MUST return the complete modified train.py file content
-2. The strategy() function signature can be EITHER: strategy(df: pd.DataFrame) -> pd.Series OR strategy(df: pd.DataFrame, context: dict) -> pd.Series
-3. You can import from strategy.indicators (sma, ema, rsi, macd, bollinger_bands, atr, stochastic, adx, vwap, obv, donchian_channel, supertrend)
+2. The strategy() MUST accept (df, context=None) as arguments
+3. You can import from strategy.indicators (sma, ema, rsi, macd, bollinger_bands, atr, stochastic, adx, vwap, obv, donchian_channel, supertrend, fair_value_gap, order_blocks, break_of_structure, liquidity_sweep, displacement)
 4. You can use pandas and numpy
-5. Make ONE focused change at a time (don't rewrite everything)
+5. Make ONE focused improvement at a time — do NOT remove existing strategies
 6. Consider what worked and what didn't in the experiment history
-7. Be creative: try different indicators, timeframe analysis, risk management, position sizing, AND economic data correlation
+7. **CRITICAL: ALL 9 strategies must remain in the code** (Trend, MeanReversion, Breakout, Momentum, Volume, ICT, ML, Economic, CrossYear). You may tune weights and improve individual strategies but NEVER remove any.
+8. **CRITICAL: You MUST use the GPU ML model** (train_model + predict_signals)
+9. **CRITICAL: You MUST use economic context data** (FRED data + economic_calendar from context dict)
+10. **CRITICAL: You MUST use ICT indicators** (at least fair_value_gap + break_of_structure + liquidity_sweep)
+11. Use ONLY vectorized pandas/numpy operations — NO Python for-loops over DataFrame rows
+12. Handle edge cases: short DataFrames (<100 bars), missing context, NaN values
 
 Return ONLY the complete Python code for train.py, nothing else. No markdown, no explanation, just the code."""
 
